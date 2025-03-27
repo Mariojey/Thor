@@ -135,51 +135,49 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
-  //Timer initialization
-  RTC_TimeTypeDef sTime;
-  RTC_DateTypeDef sDate;
+  //Timer initialization moved to app_threadx
 
 
   //UV measurement
-  HAL_Delay(1000);
-  uint8_t buf_from[1] = {0};
-
-  UART_Printf("Put device in ALS mode \r\n");
-  LTR390_WriteRegister(LTR390UV_HOLDINGREG_MAIN_CTRL, LTR390_ALSMode);
-
-
-  uint8_t buf[1];
-  LTR390_ReadRegister(LTR390UV_HOLDINGREG_MAIN_CTRL, buf, 1);
-
-  HAL_Delay(10);
-
-  // read from LTR390UV_HOLDINGREG_MAIN_CTRL
-  LTR390_ReadRegister(LTR390UV_HOLDINGREG_MAIN_CTRL, buf_from, 1);
-  UART_Printf("MAIN_CTRL: 0x%02X\r\n", buf_from[0]);
-
-  HAL_Delay(1000);
-
-  // Set measurement parameters
-  UART_Printf("\r\nSet measurement parameters\r\n");
-  LTR390_WriteRegister(LTR390UV_HOLDINGREG_ALS_UVS_MEAS_RATE, LTR390_RES18_BIT + LTR390_MEASRATE_100MS);
-
-  HAL_Delay(10);
-
-  // read from LTR390UV_HOLDINGREG_MAIN_CTRL
-  LTR390_ReadRegister(LTR390UV_HOLDINGREG_ALS_UVS_MEAS_RATE, buf_from, 1);
-  UART_Printf("MEAS_RATE: 0x%02X\r\n", buf_from[0]);
-
-  // Set gain
-  UART_Printf("\r\nSet gain\r\n");
-  LTR390_WriteRegister(LTR390UV_HOLDINGREG_ALS_UVS_GAIN, LTR390_GAIN3);
-
-  HAL_Delay(10);
-
-  // read from LTR390UV_HOLDINGREG_MAIN_CTRL
-  LTR390_ReadRegister(LTR390UV_HOLDINGREG_ALS_UVS_GAIN, buf_from, 1);
-  UART_Printf("GAIN: 0x%02X\r\n", buf_from[0]);
-
-  HAL_Delay(100);
+//  HAL_Delay(1000);
+//  uint8_t buf_from[1] = {0};
+//
+//  UART_Printf("Put device in ALS mode \r\n");
+//  LTR390_WriteRegister(LTR390UV_HOLDINGREG_MAIN_CTRL, LTR390_ALSMode);
+//
+//
+//  uint8_t buf[1];
+//  LTR390_ReadRegister(LTR390UV_HOLDINGREG_MAIN_CTRL, buf, 1);
+//
+//  HAL_Delay(10);
+//
+//  // read from LTR390UV_HOLDINGREG_MAIN_CTRL
+//  LTR390_ReadRegister(LTR390UV_HOLDINGREG_MAIN_CTRL, buf_from, 1);
+//  UART_Printf("MAIN_CTRL: 0x%02X\r\n", buf_from[0]);
+//
+//  HAL_Delay(1000);
+//
+//  // Set measurement parameters
+//  UART_Printf("\r\nSet measurement parameters\r\n");
+//  LTR390_WriteRegister(LTR390UV_HOLDINGREG_ALS_UVS_MEAS_RATE, LTR390_RES18_BIT + LTR390_MEASRATE_100MS);
+//
+//  HAL_Delay(10);
+//
+//  // read from LTR390UV_HOLDINGREG_MAIN_CTRL
+//  LTR390_ReadRegister(LTR390UV_HOLDINGREG_ALS_UVS_MEAS_RATE, buf_from, 1);
+//  UART_Printf("MEAS_RATE: 0x%02X\r\n", buf_from[0]);
+//
+//  // Set gain
+//  UART_Printf("\r\nSet gain\r\n");
+//  LTR390_WriteRegister(LTR390UV_HOLDINGREG_ALS_UVS_GAIN, LTR390_GAIN3);
+//
+//  HAL_Delay(10);
+//
+//  // read from LTR390UV_HOLDINGREG_MAIN_CTRL
+//  LTR390_ReadRegister(LTR390UV_HOLDINGREG_ALS_UVS_GAIN, buf_from, 1);
+//  UART_Printf("GAIN: 0x%02X\r\n", buf_from[0]);
+//
+//  HAL_Delay(100);
 
   MX_FileX_Init();
   /* USER CODE END 2 */
@@ -192,75 +190,75 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  	  HAL_Delay(500);
-	 	  //read ALS measurement after 1s
-	 	  uint8_t a_gain[5] = {1,3,6,9,18};
-	 	  double a_int[6] = {4.,2.,1.,0.5,0.25,0.03125}; //lux
-	 	  uint8_t gain = LTR390_GAIN3; //lux
-	 	  uint8_t resolution = (LTR390_RES18_BIT & 0xf0) >> 4; //lux
-	 	  uint8_t buffer[4] = {0};
-	 	  uint32_t originalData = 0;
-	 	  float lux = 0; //lux
-//	 	  float uv_index = 0;
-
-
-	 	  UART_Printf("Reading AL data...\r\n");
-	 	  LTR390_ReadRegister(LTR390UV_INPUTREG_ALS_DATA_LOW, buffer, 4);
-	 	  UART_Printf("Buffer: %02X %02X %02X %02X\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
-
-
-	 	  UART_Printf("MAIN_CTRL register: 0x%02X\r\n", buf[0]);
-	 	  if (buf[0] != LTR390_UVSMode) {
-	 	      UART_Printf("UV mode off!\r\n");
-	 	  }else{
-	 		  UART_Printf(" UV mode on !\r\n");
-	 	  }
-
-	 	  uint8_t size = 4;
-	 	  for(uint8_t i = 0; i < size;){
-	 		uint8_t temp = buffer[i];
-	 		buffer[i] = buffer[i+1];
-	 		buffer[i+1] = temp;
-	 		i+=2;
-	 	  }
-
-	 	  originalData = (uint32_t)buffer[2] << 24 | (uint32_t)buffer[3] << 16 | (uint16_t)buffer[0] << 8 | buffer[1]; //lux
-	 	  lux = (0.6 * originalData) / (a_gain[gain] * a_int[resolution]); //lux
-
-//	 	  originalData = (uint32_t)buffer[3] << 24 |
-//	 	                 (uint32_t)buffer[2] << 16 |
-//	 	                 (uint32_t)buffer[1] << 8 |
-//	 	                 (uint32_t)buffer[0];
-//	 	  uv_index = (float)originalData / (a_gain[gain] * a_int[resolution]);
-
-	 	  UART_Printf("Original data: %lu\r\n", originalData);
-	 	  UART_Printf("LUX dataa: %f\r\n", lux);
-//	 	  UART_Printf("UV Index: %f\r\n", uv_index);
-
-	 	  //Timer
-	 	  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-
-	 	  HAL_RTC_GetData(&hrtc, &sDate, RTC_FORMAT_BIN);
-
-	 	  snprintf(RTCBuffer, sizeof(RTCBuffer), "Time:%02d:%02d:%02d\r\n",
-	 			  sTime.Hours,
-				  sTime.Minutes,
-				  sTime.Seconds
-				  );
-
-		   HAL_UART_Transmit(&huart1, (uint8_t*)RTCBuffer, strlen(RTCBuffer), HAL_MAX_DELAY);
-		   HAL_Delay(1000);
-
-	 	  // Formatowanie do zapisywania na SD
-	 	  char buffer[50];
-	 	  snprintf(buffer, sizeof(buffer), "LUX data: %f\r\n", lux);
-
-
-	 	  write_lux_to_file(buffer);
-	 	  HAL_Delay(1000);
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
+//	  	  HAL_Delay(500);
+//	 	  //read ALS measurement after 1s
+//	 	  uint8_t a_gain[5] = {1,3,6,9,18};
+//	 	  double a_int[6] = {4.,2.,1.,0.5,0.25,0.03125}; //lux
+//	 	  uint8_t gain = LTR390_GAIN3; //lux
+//	 	  uint8_t resolution = (LTR390_RES18_BIT & 0xf0) >> 4; //lux
+//	 	  uint8_t buffer[4] = {0};
+//	 	  uint32_t originalData = 0;
+//	 	  float lux = 0; //lux
+////	 	  float uv_index = 0;
+//
+//
+//	 	  UART_Printf("Reading AL data...\r\n");
+//	 	  LTR390_ReadRegister(LTR390UV_INPUTREG_ALS_DATA_LOW, buffer, 4);
+//	 	  UART_Printf("Buffer: %02X %02X %02X %02X\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+//
+//
+//	 	  UART_Printf("MAIN_CTRL register: 0x%02X\r\n", buf[0]);
+//	 	  if (buf[0] != LTR390_UVSMode) {
+//	 	      UART_Printf("UV mode off!\r\n");
+//	 	  }else{
+//	 		  UART_Printf(" UV mode on !\r\n");
+//	 	  }
+//
+//	 	  uint8_t size = 4;
+//	 	  for(uint8_t i = 0; i < size;){
+//	 		uint8_t temp = buffer[i];
+//	 		buffer[i] = buffer[i+1];
+//	 		buffer[i+1] = temp;
+//	 		i+=2;
+//	 	  }
+//
+//	 	  originalData = (uint32_t)buffer[2] << 24 | (uint32_t)buffer[3] << 16 | (uint16_t)buffer[0] << 8 | buffer[1]; //lux
+//	 	  lux = (0.6 * originalData) / (a_gain[gain] * a_int[resolution]); //lux
+//
+////	 	  originalData = (uint32_t)buffer[3] << 24 |
+////	 	                 (uint32_t)buffer[2] << 16 |
+////	 	                 (uint32_t)buffer[1] << 8 |
+////	 	                 (uint32_t)buffer[0];
+////	 	  uv_index = (float)originalData / (a_gain[gain] * a_int[resolution]);
+//
+//	 	  UART_Printf("Original data: %lu\r\n", originalData);
+//	 	  UART_Printf("LUX dataa: %f\r\n", lux);
+////	 	  UART_Printf("UV Index: %f\r\n", uv_index);
+//
+//	 	  //Timer
+//	 	  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+//
+//	 	  HAL_RTC_GetData(&hrtc, &sDate, RTC_FORMAT_BIN);
+//
+//	 	  snprintf(RTCBuffer, sizeof(RTCBuffer), "Time:%02d:%02d:%02d\r\n",
+//	 			  sTime.Hours,
+//				  sTime.Minutes,
+//				  sTime.Seconds
+//				  );
+//
+//		   HAL_UART_Transmit(&huart1, (uint8_t*)RTCBuffer, strlen(RTCBuffer), HAL_MAX_DELAY);
+//		   HAL_Delay(1000);
+//
+//	 	  // Formatowanie do zapisywania na SD
+//	 	  char buffer[50];
+//	 	  snprintf(buffer, sizeof(buffer), "LUX data: %f\r\n", lux);
+//
+//
+//	 	  write_lux_to_file(buffer);
+//	 	  HAL_Delay(1000);
+//    /* USER CODE END WHILE */
+//
+//    /* USER CODE BEGIN 3 */
 
   }
   /* USER CODE END 3 */
