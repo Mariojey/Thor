@@ -368,44 +368,44 @@ VOID sd_storage_thread_entry(ULONG initial_input)
 
 
 
-float calculate_lux(uint8_t *buffer)
-{
-    uint8_t a_gain[5] = {1, 3, 6, 9, 18};
-    double a_int[6] = {4.0, 2.0, 1.0, 0.5, 0.25, 0.03125}; // lux
-    uint8_t gain = LTR390_GAIN3;                           // lux
-    uint8_t resolution = (LTR390_RES18_BIT & 0xf0) >> 4;   // lux
-    uint32_t originalData;
+//float calculate_lux(uint8_t *buffer)
+//{
+//    uint8_t a_gain[5] = {1, 3, 6, 9, 18};
+//    double a_int[6] = {4.0, 2.0, 1.0, 0.5, 0.25, 0.03125}; // lux
+//    uint8_t gain = LTR390_GAIN3;                           // lux
+//    uint8_t resolution = (LTR390_RES18_BIT & 0xf0) >> 4;   // lux
+//    uint32_t originalData;
+//
+//    uint8_t size = 4;
+//    for (uint8_t i = 0; i < size;)
+//    {
+//        uint8_t temp = buffer[i];
+//        buffer[i] = buffer[i + 1];
+//        buffer[i + 1] = temp;
+//        i += 2;
+//    }
+//
+//    originalData = (uint32_t)buffer[2] << 24 | (uint32_t)buffer[3] << 16 |
+//                   (uint16_t)buffer[0] << 8 | buffer[1];
+//    float lux = (0.6 * originalData) / (a_gain[gain] * a_int[resolution]);
+//    return lux;
+//}
 
-    uint8_t size = 4;
-    for (uint8_t i = 0; i < size;)
-    {
-        uint8_t temp = buffer[i];
-        buffer[i] = buffer[i + 1];
-        buffer[i + 1] = temp;
-        i += 2;
-    }
-
-    originalData = (uint32_t)buffer[2] << 24 | (uint32_t)buffer[3] << 16 |
-                   (uint16_t)buffer[0] << 8 | buffer[1];
-    float lux = (0.6 * originalData) / (a_gain[gain] * a_int[resolution]);
-    return lux;
-}
-
-void write_lux_to_file(const char *data)
-{
-    UINT status;
-
-    fx_file_seek(&file, 0, FX_SEEK_END);
-
-    status = fx_file_write(&file, data, strlen(data));
-
-    if (status != FX_SUCCESS)
-    {
-        UART_Printf("Failed to save data %u\n", status);
-    }
-
-    fx_file_flush(&file);
-}
+//void write_lux_to_file(const char *data)
+//{
+//    UINT status;
+//
+//    fx_file_seek(&file, 0, FX_SEEK_END);
+//
+//    status = fx_file_write(&file, data, strlen(data));
+//
+//    if (status != FX_SUCCESS)
+//    {
+//        UART_Printf("Failed to save data %u\n", status);
+//    }
+//
+//    fx_file_flush(&file);
+//}
 
 void UART_Printf(const char *fmt, ...)
 {
