@@ -68,12 +68,88 @@ void HAL_MspInit(void)
   /* USER CODE END MspInit 0 */
 
   __HAL_RCC_PWR_CLK_ENABLE();
+  HAL_PWREx_EnableVddA();
 
   /* System interrupt init*/
 
   /* USER CODE BEGIN MspInit 1 */
 
   /* USER CODE END MspInit 1 */
+}
+
+/**
+  * @brief ADC MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param hadc: ADC handle pointer
+  * @retval None
+  */
+void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+  if(hadc->Instance==ADC1)
+  {
+    /* USER CODE BEGIN ADC1_MspInit 0 */
+
+    /* USER CODE END ADC1_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADCDAC;
+    PeriphClkInit.AdcDacClockSelection = RCC_ADCDACCLKSOURCE_HSI;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Peripheral clock enable */
+    __HAL_RCC_ADC12_CLK_ENABLE();
+
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    /**ADC1 GPIO Configuration
+    PA0     ------> ADC1_IN5
+    PA1     ------> ADC1_IN6
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /* USER CODE BEGIN ADC1_MspInit 1 */
+
+    /* USER CODE END ADC1_MspInit 1 */
+
+  }
+
+}
+
+/**
+  * @brief ADC MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param hadc: ADC handle pointer
+  * @retval None
+  */
+void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
+{
+  if(hadc->Instance==ADC1)
+  {
+    /* USER CODE BEGIN ADC1_MspDeInit 0 */
+
+    /* USER CODE END ADC1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_ADC12_CLK_DISABLE();
+
+    /**ADC1 GPIO Configuration
+    PA0     ------> ADC1_IN5
+    PA1     ------> ADC1_IN6
+    */
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_0|GPIO_PIN_1);
+
+    /* USER CODE BEGIN ADC1_MspDeInit 1 */
+
+    /* USER CODE END ADC1_MspDeInit 1 */
+  }
+
 }
 
 /**
@@ -210,6 +286,108 @@ void HAL_RTC_MspDeInit(RTC_HandleTypeDef* hrtc)
     /* USER CODE BEGIN RTC_MspDeInit 1 */
 
     /* USER CODE END RTC_MspDeInit 1 */
+  }
+
+}
+
+/**
+  * @brief SD MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param hsd: SD handle pointer
+  * @retval None
+  */
+void HAL_SD_MspInit(SD_HandleTypeDef* hsd)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+  if(hsd->Instance==SDMMC1)
+  {
+    /* USER CODE BEGIN SDMMC1_MspInit 0 */
+
+    /* USER CODE END SDMMC1_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_SDMMC;
+    PeriphClkInit.SdmmcClockSelection = RCC_SDMMCCLKSOURCE_PLL1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Peripheral clock enable */
+    __HAL_RCC_SDMMC1_CLK_ENABLE();
+
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    /**SDMMC1 GPIO Configuration
+    PC8     ------> SDMMC1_D0
+    PC9     ------> SDMMC1_D1
+    PC10     ------> SDMMC1_D2
+    PC11     ------> SDMMC1_D3
+    PC12     ------> SDMMC1_CK
+    PD2     ------> SDMMC1_CMD
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11
+                          |GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_SDMMC1;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_2;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF12_SDMMC1;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /* SDMMC1 interrupt Init */
+    HAL_NVIC_SetPriority(SDMMC1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(SDMMC1_IRQn);
+    /* USER CODE BEGIN SDMMC1_MspInit 1 */
+
+    /* USER CODE END SDMMC1_MspInit 1 */
+
+  }
+
+}
+
+/**
+  * @brief SD MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param hsd: SD handle pointer
+  * @retval None
+  */
+void HAL_SD_MspDeInit(SD_HandleTypeDef* hsd)
+{
+  if(hsd->Instance==SDMMC1)
+  {
+    /* USER CODE BEGIN SDMMC1_MspDeInit 0 */
+
+    /* USER CODE END SDMMC1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_SDMMC1_CLK_DISABLE();
+
+    /**SDMMC1 GPIO Configuration
+    PC8     ------> SDMMC1_D0
+    PC9     ------> SDMMC1_D1
+    PC10     ------> SDMMC1_D2
+    PC11     ------> SDMMC1_D3
+    PC12     ------> SDMMC1_CK
+    PD2     ------> SDMMC1_CMD
+    */
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11
+                          |GPIO_PIN_12);
+
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_2);
+
+    /* SDMMC1 interrupt DeInit */
+    HAL_NVIC_DisableIRQ(SDMMC1_IRQn);
+    /* USER CODE BEGIN SDMMC1_MspDeInit 1 */
+
+    /* USER CODE END SDMMC1_MspDeInit 1 */
   }
 
 }

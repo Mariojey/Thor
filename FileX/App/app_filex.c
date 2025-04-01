@@ -49,6 +49,11 @@
 /* Main thread global data structures.  */
 TX_THREAD       fx_app_thread;
 
+/* Buffer for FileX FX_MEDIA sector cache. */
+ALIGN_32BYTES (uint32_t fx_sd_media_memory[FX_STM32_SD_DEFAULT_SECTOR_SIZE / sizeof(uint32_t)]);
+/* Define FileX global data structures.  */
+FX_MEDIA        sdio_disk;
+
 /* USER CODE BEGIN PV */
 FX_MEDIA sd_disk;
 FX_FILE file;
@@ -127,9 +132,22 @@ UINT MX_FileX_Init(VOID *memory_ptr)
  void fx_app_thread_entry(ULONG thread_input)
  {
 
+  UINT sd_status = FX_SUCCESS;
+
 /* USER CODE BEGIN fx_app_thread_entry 0*/
 
 /* USER CODE END fx_app_thread_entry 0*/
+
+/* Open the SD disk driver */
+  sd_status =  fx_media_open(&sdio_disk, FX_SD_VOLUME_NAME, fx_stm32_sd_driver, (VOID *)FX_NULL, (VOID *) fx_sd_media_memory, sizeof(fx_sd_media_memory));
+
+/* Check the media open sd_status */
+  if (sd_status != FX_SUCCESS)
+  {
+     /* USER CODE BEGIN SD DRIVER get info error */
+    while(1);
+    /* USER CODE END SD DRIVER get info error */
+  }
 
 /* USER CODE BEGIN fx_app_thread_entry 1*/
 	 UINT status;

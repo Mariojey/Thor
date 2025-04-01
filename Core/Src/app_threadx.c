@@ -26,6 +26,8 @@
 #include "main.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <app_filex.h>
+//#include <adc.h>
 
 /* USER CODE END Includes */
 
@@ -36,8 +38,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define THREAD_STACK_SIZE 1024
-#define LTR390_UVSMode 0x02
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,32 +47,41 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-uint8_t sensor_thread_stack[THREAD_STACK_SIZE];
-uint8_t storage_thread_stack[THREAD_STACK_SIZE];
+#define THREAD_STACK_SIZE 1024
+#define QUEUE_SIZE 32;
 
-TX_THREAD sensor_thread;
-TX_THREAD storage_thread;
-TX_QUEUE sensor_data_queue;
+//Threads variables
+TX_THREAD uv_sensor_thread;
+TX_THREAD accelerometr_thread;
+TX_THREAD sd_storage_thread;
+TX_QUEUE uv_data_queue;
+TX_QUEUE accel_data_queue;
 
-char RTCBuffer[100];
-extern I2C_HandleTypeDef h12c1;
+
+uint8_t uv_thread_stack[THREAD_STACK_SIZE];
+uint8_t accel_thread_stack[THREAD_STACK_SIZE];
+uint8_t sd_thread_stack[THREAD_STACK_SIZE];
+
+static ULONG uv_queue_buffer[QUEUE_SIZE];
+static ULONG accel_queue_buffer[QUEUE_SIZE];
+
 extern UART_HandleTypeDef huart1;
+extern I2C_HandleTypeDef hi2c1;
+extern ADC_HandleTypeDef hadc1;
 extern FX_FILE file;
 
-
-float lux_index_global = 0.0;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
 
-VOID sensor_thread_entry(ULONG initial_input);
-VOID storage_thread_entry(ULONG initial_input);
+VOID uv_sensor_thread_entry(ULONG initial_input);
+VOID accelerometer_thread_entry(ULONG initial_input);
+VOID sd_storage_thread_entry(ULONG initial_input);
 
 void UART_Printf(const char *fmt, ...);
-float calculate_lux(uint8_t *buffer);
-void write_lux_to_file(const char *data);
+void write_data_to_file(const char *data);
 
 /* USER CODE END PFP */
 
@@ -86,19 +95,43 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
   UINT ret = TX_SUCCESS;
 
   /* USER CODE BEGIN App_ThreadX_MEM_POOL */
-  static ULONG queue_buffer[32];
+  	tx_queue_create(&uv_data_queue, "UV Data Queue", TX_1_ULONG, uv_queue_buffer, sizeof(uv_queue_buffer));
+    tx_queue_create(&accel_data_queue, "Accelerometer Queue", TX_1_ULONG, accel_queue_buffer, sizeof(accel_queue_buffer));
+
 
   /* USER CODE END App_ThreadX_MEM_POOL */
 
   /* USER CODE BEGIN App_ThreadX_Init */
-  tx_thread_create(&sensor_thread, "Sensor Thread", sensor_thread_entry, 0,
-                       sensor_thread_stack, THREAD_STACK_SIZE, 10, 10, TX_NO_TIME_SLICE, TX_AUTO_START);
+  tx_thread_create(
+		  &uv_sensor_thread,
+		  "UV Thread",
+		  uv_sensor_thread_entry,0,
+		  uv_thread_stack,
+		  THREAD_STACK_SIZE,
+		  10, 10,
+		  TX_NO_TIME_SLICE,
+		  TX_AUTO_START);
 
-  tx_thread_create(&storage_thread, "Storage Thread", storage_thread_entry, 0,
-                       storage_thread_stack, THREAD_STACK_SIZE, 12, 12, TX_NO_TIME_SLICE, TX_AUTO_START);
+  tx_thread_create(
+		  &accelerometer_thread,
+		  "Accelerometer Thread",
+		  accelerometer_thread_entry,0,
+		  accel_thread_stack,
+		  THREAD_STACK_SIZE,
+		  10, 10,
+		  TX_NO_TIME_SLICE,
+		  TX_AUTO_START);
 
-  tx_queue_create(&sensor_data_queue, "Sensor Data Queue", TX_1_ULONG,
-                      queue_buffer, sizeof(queue_buffer));
+  tx_thread_create(
+		  &sd_storage_thread,
+		  "SD Thread",
+		  sd_storage_thread_entry,0,
+		  sd_thread_stack,
+		  THREAD_STACK_SIZE,
+		  5,5,
+		  TX_NO_TIME_SLICE,
+		  TX_AUTO_START);
+
   /* USER CODE END App_ThreadX_Init */
 
   return ret;
@@ -124,31 +157,148 @@ void MX_ThreadX_Init(void)
 
 /* USER CODE BEGIN 1 */
 
-VOID sensor_thread_entry(ULONG initial_input)
-{
-    uint8_t buffer[4] = {0};
-    uint8_t buf[1];
-    RTC_TimeTypeDef sTime;
-    RTC_DateTypeDef sDate;
+HAL_StatusTypeDef LTR390_WriteRegister(uint8_t reg, uint8_t value) {
+    uint8_t data[3] = {reg + 5, value, 0};
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, LTR390UV_DEVICE_ADDR, data, 3, HAL_MAX_DELAY);
 
-    while (1)
-    {
-        UART_Printf("Reading ALS data...\r\n");
-        LTR390_ReadRegister(LTR390UV_INPUTREG_ALS_DATA_LOW, buffer, 4);
-
-        float lux = calculate_lux(buffer);
-
-        HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-        HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-
-        snprintf(RTCBuffer, sizeof(RTCBuffer), "Time:%02d:%02d:%02d\r\n",
-                 sTime.Hours, sTime.Minutes, sTime.Seconds);
-
-        HAL_UART_Transmit(&huart1, (uint8_t *)RTCBuffer, strlen(RTCBuffer), HAL_MAX_DELAY);
-
-        tx_queue_send(&sensor_data_queue, &lux, TX_NO_WAIT); // Send data to queue
-        tx_thread_sleep(10);                                // Cycle every 10 ms
+    if (status != HAL_OK) {
+        UART_Printf("I2C Write Error: reg=0x%X, value=0x%X, status=%d\r\n", reg, value, status);
+    } else {
+        UART_Printf("I2C Write Success: reg=0x%X, value=0x%X\r\n", reg, value);
     }
+    return status;
+}
+
+HAL_StatusTypeDef LTR390_ReadRegister(uint8_t reg, uint8_t *data, uint8_t length) {
+    HAL_StatusTypeDef status;
+
+    // Wysłanie adresu rejestru
+    status = HAL_I2C_Master_Transmit(&hi2c1, LTR390UV_DEVICE_ADDR, &reg, 1, HAL_MAX_DELAY);
+    if (status != HAL_OK) {
+        UART_Printf("I2C TX Error: %d\r\n", status);
+        return status;
+    }
+
+    // Odczyt danych z rejestru
+    status = HAL_I2C_Master_Receive(&hi2c1, LTR390UV_DEVICE_ADDR, data, length, HAL_MAX_DELAY);
+    if (status != HAL_OK) {
+        UART_Printf("I2C RX Error: %d\r\n", status);
+    }
+
+    return status;
+}
+
+void LTR390_Init() {
+
+    // Reset czujnika przed konfiguracją
+    LTR390_WriteRegister(0x00, 0x00);
+    HAL_Delay(10);
+    LTR390_WriteRegister(0x00, 0x01);
+    HAL_Delay(10);
+    LTR390_WriteRegister(0x00, 0x00);
+    HAL_Delay(10);
+
+    //Sprawdzenie ID czujnika
+    uint8_t sensor_id = 0;
+    if (LTR390_ReadRegister(0x06, &sensor_id, 1) == HAL_OK) {
+        UART_Printf("LTR390UV sensor responded ID: 0x%X\r\n", sensor_id);
+        if (sensor_id == 0xB2) {
+            UART_Printf("LTR390UV detected correctly\n");
+        } else {
+            UART_Printf("LTR390UV returned wrong ID: 0x%X\r\n", sensor_id);
+        }
+    } else {
+        UART_Printf("LTR390UV sensor communication error\r\n");
+    }
+
+    // KONFIGURACJA CZUJNIKA
+    LTR390_WriteRegister(0x00, 0x0A);  // Włączenie w trybie UV
+    HAL_Delay(10);
+    LTR390_WriteRegister(0x04, 0x06);  // 20-bit, 800ms integracji (dla stabilności)
+    LTR390_WriteRegister(0x05, 0x03);  // Gain 9x
+    HAL_Delay(10);
+
+    // Wymuszenie startu pomiaru + ustawienie aktywnego trybu
+    LTR390_WriteRegister(0x00, 0x0B);  // Tryb UV + aktywacja
+    HAL_Delay(100);
+
+    // Sprawdzenie, czy konfiguracja zapisała się
+    uint8_t gain_value = 0;
+    LTR390_ReadRegister(0x05, &gain_value, 1);
+    UART_Printf("Odczytany GAIN: 0x%X\r\n", gain_value);
+
+    HAL_Delay(500);
+}
+
+uint32_t LTR390_ReadUV() {
+    uint8_t raw_data[3] = {0};
+    LTR390_ReadRegister(0x10, raw_data, 3);
+
+    return ((uint32_t)raw_data[2] << 16) | ((uint32_t)raw_data[1] << 8) | raw_data[0];
+}
+
+void I2C_Scan() {
+    UART_Printf("Skanuję I2C...\n");
+    for (uint8_t addr = 1; addr < 127; addr++) {
+        if (HAL_I2C_IsDeviceReady(&hi2c1, addr << 1, 3, HAL_MAX_DELAY) == HAL_OK) {
+            UART_Printf("Znaleziono urządzenie na adresie: 0x%X\n", addr);
+        }
+    }
+}
+
+float convertToUVI(uint32_t uv_data) {
+    float uv_sensitivity = 2300.0;  // Wartość zależna od specyfikacji czujnika
+    return (float)uv_data / uv_sensitivity;
+}
+
+uint8_t LTR390_ReadStatus() {
+	    uint8_t status = 0;
+	    LTR390_ReadRegister(0x07, &status, 1);
+//	    UART_Printf("Status: 0x%X\r\n", status);  // DEBUG
+	    return status;
+	}
+
+void Start_UV_Measurement() {
+    UART_Printf("Wymuszanie startu pomiaru UV...\r\n");
+    LTR390_WriteRegister(0x00, 0x0A);  // Tryb UV
+    HAL_Delay(10);
+    LTR390_WriteRegister(0x00, 0x02);  // Start pomiaru
+    HAL_Delay(100);
+
+    // Sprawdzenie statusu czy czujnik gotowy
+    uint8_t status = 0;
+    for (int i = 0; i < 10; i++) {
+        LTR390_ReadRegister(0x07, &status, 1);
+        UART_Printf("Status: 0x%X\r\n", status);
+        if (status & 0x08) {  // Bit 3 == DATA_READY
+            UART_Printf("Dane gotowe do odczytu!\r\n");
+            return;
+        }
+        HAL_Delay(100);
+    }
+    UART_Printf("Błąd: czujnik nie przechodzi do trybu pomiaru!\r\n");
+}
+
+VOID uv_sensor_thread_entry(ULONG inital_input){
+
+	uint32_t buffer[4] = {0};
+
+	//reset and put into uv mode
+	LTR390_Init();
+
+
+
+	while(1){
+
+		LTR390_ReadRegister(0x10, buffer, 4);
+		float uv = convertToUVI(buffer);
+
+		tx_queue_send(&uv_data_queue, &uv, TX_NO_WAIT);
+
+		UART_Printf("UV Data sent: %.2f lux\n", uv);
+		tx_thread_sleep(100);
+
+	}
 }
 
 VOID storage_thread_entry(ULONG initial_input)
@@ -165,6 +315,58 @@ VOID storage_thread_entry(ULONG initial_input)
         }
     }
 }
+
+/* Accelerometer Thread */
+VOID accelerometer_thread_entry(ULONG initial_input)
+{
+    uint32_t adc_value_z = 0, adc_value_xy = 0;
+    float acceleration_z, acceleration_xy;
+    while (1)
+    {
+        HAL_ADC_Start(&hadc1);
+        HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+        adc_value_z = HAL_ADC_GetValue(&hadc1);
+        HAL_ADC_Stop(&hadc1);
+
+        acceleration_z = (3.3 * adc_value_z / 4095.0) - 1.65;
+
+        HAL_ADC_Start(&hadc1);
+        HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+        adc_value_xy = HAL_ADC_GetValue(&hadc1);
+        HAL_ADC_Stop(&hadc1);
+
+        acceleration_xy = (3.3 * adc_value_xy / 4095.0) - 1.65;
+
+        tx_queue_send(&accel_data_queue, &acceleration_z, TX_NO_WAIT);
+        tx_queue_send(&accel_data_queue, &acceleration_xy, TX_NO_WAIT);
+        UART_Printf("Acceleration Z: %.2f g, Acceleration XY: %.2f g\n", acceleration_z, acceleration_xy);
+        tx_thread_sleep(100);
+    }
+}
+
+/* SD Storage Thread */
+VOID sd_storage_thread_entry(ULONG initial_input)
+{
+    float lux, acceleration_z, acceleration_xy;
+    while (1)
+    {
+        if (tx_queue_receive(&uv_data_queue, &lux, TX_WAIT_FOREVER) == TX_SUCCESS)
+        {
+            char buffer[50];
+            snprintf(buffer, sizeof(buffer), "UV: %.2f lux\n", lux);
+            write_data_to_file(buffer);
+        }
+        if (tx_queue_receive(&accel_data_queue, &acceleration_z, TX_WAIT_FOREVER) == TX_SUCCESS &&
+            tx_queue_receive(&accel_data_queue, &acceleration_xy, TX_WAIT_FOREVER) == TX_SUCCESS)
+        {
+            char buffer[50];
+            snprintf(buffer, sizeof(buffer), "Accel Z: %.2f g, XY: %.2f g\n", acceleration_z, acceleration_xy);
+            write_data_to_file(buffer);
+        }
+    }
+}
+
+
 
 float calculate_lux(uint8_t *buffer)
 {
